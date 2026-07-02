@@ -71,6 +71,8 @@ class Config:
     # message_thread_id топика в группе менеджеров, куда слать заявки.
     # 0 — без топика (обычный чат / тема «General»).
     managers_topic_id: int = 0
+    # Файл FSM-хранилища: его же читают сегмент «бросили заявку» и напоминания.
+    fsm_db_path: str = "fsm.db"
 
 
 def load_config() -> Config:
@@ -93,4 +95,5 @@ def load_config() -> Config:
         gsheet_worksheet=os.getenv("GSHEET_WORKSHEET", ""),
         # (Необязательно) топик в группе менеджеров. Узнать id: /chatinfo в топике.
         managers_topic_id=managers_topic_id,
+        fsm_db_path=os.getenv("FSM_DB_PATH", "fsm.db"),
     )

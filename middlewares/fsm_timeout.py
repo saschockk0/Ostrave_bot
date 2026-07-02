@@ -26,6 +26,11 @@ DEFAULT_TTL_SECONDS = 30 * 60  # полчаса без активности — 
 # Ключ с подчёркиванием, чтобы не путать с «бизнес»-полями заявки в данных FSM.
 LAST_ACTIVE_KEY = "_last_active"
 
+# Кнопки, которые работают и без состояния (FAQ, тур, чек-лист, кнопки рассылок):
+# после сброса протухшего диалога их хендлер отработает штатно, поэтому пугать
+# алертом «сессия истекла» не нужно — он только для «мёртвых» кнопок шагов FSM.
+_STATELESS_PREFIXES = ("faq:", "tour:", "pack:", "bcast:")
+
 
 class FSMTimeoutMiddleware(BaseMiddleware):
     def __init__(self, ttl_seconds: int = DEFAULT_TTL_SECONDS) -> None:
@@ -45,7 +50,9 @@ class FSMTimeoutMiddleware(BaseMiddleware):
             if last is not None and now - last > self.ttl:
                 await state.clear()
                 logger.info("FSM сброшен по таймауту (%.0f c простоя)", now - last)
-                if isinstance(event, CallbackQuery):
+                if isinstance(event, CallbackQuery) and not str(event.data or "").startswith(
+                    _STATELESS_PREFIXES
+                ):
                     # Старая inline-кнопка после паузы — гасим «часики» и подсказываем.
                     try:
                         await event.answer("Сессия истекла — начните заново 🙂", show_alert=True)

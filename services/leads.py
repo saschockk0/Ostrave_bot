@@ -16,7 +16,7 @@ from aiogram.types import InlineKeyboardMarkup, Message
 from config import Config
 from keyboards import manager_lead_kb
 from models import Application
-from services import attribution, sheets, storage
+from services import attribution, sheets, storage, users
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +57,12 @@ async def submit_application(bot: Bot, config: Config, application: Application)
     сохранению — клиент в любом случае не теряется.
     """
     # Единая точка привязки источника: работает и для чата, и для Mini App.
+    # Сессионная атрибуция (last-touch) в приоритете; если бот перезапускался —
+    # берём персистентный first-touch из реестра пользователей.
     if application.source is None and application.user_id:
-        application.source = attribution.get(application.user_id)
+        application.source = (
+            attribution.get(application.user_id) or users.get_source(application.user_id)
+        )
 
     storage.add(application)  # присваивает application.id
 

@@ -2,6 +2,7 @@ from aiogram import Router
 
 from handlers import (
     application,
+    broadcast,
     calculator,
     fallback,
     faq,
@@ -17,6 +18,7 @@ def setup_routers() -> Router:
     router = Router()
     router.include_router(start.router)
     router.include_router(manager.router)      # команды и кнопки менеджеров
+    router.include_router(broadcast.router)    # рассылки по сегментам (/broadcast)
     router.include_router(faq.router)          # ветка «Есть вопрос» (FAQ)
     router.include_router(tour.router)         # «Тур по Острову» (кнопка «О вечеринке»)
     router.include_router(packing.router)      # интерактивный чек-лист сборов

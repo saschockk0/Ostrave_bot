@@ -211,6 +211,21 @@ def success_kb(invite_link: str | None, invite_text: str) -> InlineKeyboardMarku
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def broadcast_kb(cta: tuple[str, str] | None) -> InlineKeyboardMarkup:
+    """Кнопки под рассылкой/напоминанием: CTA (текст, callback) + отписка.
+
+    Кнопка «Больше не присылать» обязательна в каждой рассылке — это и есть
+    разница между полезным напоминанием и спамом.
+    """
+    rows: list[list[InlineKeyboardButton]] = []
+    if cta:
+        rows.append([InlineKeyboardButton(text=cta[0], callback_data=cta[1])])
+    rows.append(
+        [InlineKeyboardButton(text="🔕 Больше не присылать", callback_data="bcast:mute")]
+    )
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 # --- калькулятор ----------------------------------------------------------
 _calc_cancel_row = [InlineKeyboardButton(text="✖️ Отмена", callback_data="calc:cancel")]
 

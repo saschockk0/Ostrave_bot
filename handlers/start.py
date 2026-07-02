@@ -18,7 +18,7 @@ from models import (
     STATUS_REJECTED,
     status_label,
 )
-from services import attribution, storage
+from services import attribution, storage, users
 
 router = Router()
 
@@ -82,8 +82,10 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
     await state.clear()
     # Источник перехода из deep-link: https://t.me/<bot>?start=<payload>.
     # Привяжется к заявке при отправке (services.leads.submit_application).
+    # В реестре пользователей источник сохраняется персистентно (first-touch).
     if command.args and message.from_user:
         attribution.remember(message.from_user.id, command.args)
+        users.set_source(message.from_user.id, command.args)
     # Живой крючок: отсчёт до старта (если ещё впереди) — затем меню.
     cd = countdown.line()
     text = f"{cd}\n\n{WELCOME}" if cd else WELCOME
