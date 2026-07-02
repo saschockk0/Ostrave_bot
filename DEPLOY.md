@@ -17,23 +17,18 @@
 | `fsm.db` | недозаполненные диалоги гостей | желательно |
 | `creds.json` | ключ Google Sheets | только если включён `GSHEET_ID` (сейчас выключен) |
 
-**Не** переносить: `.venv/`, `__pycache__/`, `bot*.log`, `webapp/node_modules/`.
-`webapp/` целиком можно пропустить — `WEBAPP_URL` в проде пуст, Mini App не используется.
-
-Архив для переноса (собирается на Windows-машине):
-
-```powershell
-tar -czf ostrave_bot.tar.gz --exclude=.venv --exclude=__pycache__ `
-    --exclude='bot*.log*' --exclude=webapp -C C:\ -- Ostrave_bot
-```
+Код удобнее всего забирать из git: `https://github.com/saschockk0/Ostrave_bot`
+(приватный — на сервере понадобится токен или deploy key). Отдельно руками
+переносятся только `.env`, `leads.db` и `fsm.db` — они в git не попадают
+(секреты и данные, см. `.gitignore`).
 
 ## Установка на сервере
 
 ```bash
-# 1. Пользователь и каталог
+# 1. Пользователь и код
 sudo useradd --system --home /opt/ostrave_bot --shell /usr/sbin/nologin ostrave
-sudo mkdir -p /opt/ostrave_bot
-sudo tar -xzf ostrave_bot.tar.gz -C /opt --strip-components=1  # Ostrave_bot → /opt/ostrave_bot
+sudo git clone https://github.com/saschockk0/Ostrave_bot.git /opt/ostrave_bot
+# скопировать .env, leads.db, fsm.db с Windows-машины (например, через scp) в /opt/ostrave_bot/
 sudo chown -R ostrave:ostrave /opt/ostrave_bot
 
 # 2. Окружение
@@ -79,6 +74,6 @@ Telegram допускает **только один** polling-экземпляр
 | Действие | Команда |
 |----------|---------|
 | Статус / логи | `systemctl status ostrave-bot` · `journalctl -u ostrave-bot -f` |
-| Перезапуск после обновления кода | префлайт (шаг 3 выше) → `sudo systemctl restart ostrave-bot` |
+| Обновление кода | `cd /opt/ostrave_bot && sudo -u ostrave git pull` → префлайт (шаг 3 выше) → `sudo systemctl restart ostrave-bot` |
 | Логи бота (ротируемые) | `/opt/ostrave_bot/bot.log` |
 | Бэкап заявок | достаточно копировать `leads.db` (например, в cron) |
