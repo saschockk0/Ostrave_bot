@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "higgsfield-generate": {
+      "source": "higgsfield-ai/skills",
+      "sourceType": "github",
+      "skillPath": "higgsfield-generate/SKILL.md",
+      "computedHash": "b9ed7df52c029ad750fc5e9f098d37593850fd6ae77ed45119b2250ec55d55f2"
+    },
+    "telegram-bot": {
+      "source": "claude-office-skills/skills",
+      "sourceType": "github",
+      "skillPath": "telegram-bot/SKILL.md",
+      "computedHash": "987517b2bf10b114c441a15939e2e31dce3890f826e42d0a52efdba20270c3ce"
+    }
+  }
+}

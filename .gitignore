@@ -1,0 +1,15 @@
+.env
+creds.json
+*.db
+__pycache__/
+*.pyc
+node_modules/
+webapp/dist/
+# Сырые промо-медиа (кодом не используются) и архив переноса на сервер
+content/
+*.tar.gz
+.venv/
+venv/
+# Логи: bot.log (+ ротация bot.log.1…) и редиректы лаунчера bot.err/out.log
+*.log
+*.log.*
