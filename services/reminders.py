@@ -54,12 +54,8 @@ async def run_loop(bot: Bot, config: Config) -> None:
         await asyncio.sleep(CHECK_INTERVAL)
 
 
-def _parse_private_user_id(key: str) -> int | None:
-    """user_id из ключа FSM, только личные чаты (формат «bot:chat:user:destiny»)."""
-    parts = key.split(":")
-    if len(parts) < 3 or parts[1] != parts[2] or not parts[2].isdigit():
-        return None
-    return int(parts[2])
+# Разбор ключа FSM живёт в services.users — единая точка для формата ключа.
+_parse_private_user_id = users.parse_fsm_private_user_id
 
 
 async def _pass(bot: Bot, config: Config) -> int:

@@ -191,24 +191,30 @@ def _fsm_rows(fsm_db_path: str) -> list[tuple[str, str | None]]:
         conn.close()
 
 
-def _fsm_user_ids(fsm_db_path: str, state_prefix: str | None = None) -> set[int]:
-    """user_id из ключей FSM (только личные чаты: chat_id == user_id).
+def parse_fsm_private_user_id(key: str) -> int | None:
+    """user_id из ключа FSM, только личные чаты (chat_id == user_id).
 
     Формат ключа задаёт DefaultKeyBuilder(with_bot_id=True, with_destiny=True):
-    «bot_id:chat_id:user_id:destiny». `state_prefix` фильтрует по состоянию,
-    напр. "NewLead" — только незаконченные заявки.
+    «fsm:bot_id:chat_id:user_id:destiny» («fsm» — стандартный префикс билдера).
     """
+    parts = key.split(":")
+    if parts and parts[0] == "fsm":
+        parts = parts[1:]
+    if len(parts) < 3 or parts[1] != parts[2] or not parts[2].isdigit():
+        return None
+    return int(parts[2])
+
+
+def _fsm_user_ids(fsm_db_path: str, state_prefix: str | None = None) -> set[int]:
+    """user_id из FSM-хранилища; `state_prefix` фильтрует по состоянию,
+    напр. "NewLead" — только незаконченные заявки."""
     ids: set[int] = set()
     for key, state in _fsm_rows(fsm_db_path):
         if state_prefix is not None and not (state or "").startswith(state_prefix):
             continue
-        parts = key.split(":")
-        if len(parts) < 3:
-            continue
-        chat_id, user_id = parts[1], parts[2]
-        if chat_id != user_id or not user_id.isdigit():
-            continue
-        ids.add(int(user_id))
+        user_id = parse_fsm_private_user_id(key)
+        if user_id is not None:
+            ids.add(user_id)
     return ids
 
 
