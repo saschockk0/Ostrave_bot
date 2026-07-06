@@ -27,7 +27,7 @@ def render(mask: int) -> str:
         f"<b>Собрано: {done} из {_TOTAL}</b>"
     )
     if done == _TOTAL:
-        text += "\n\n🏝 Рюкзак готов — Волга ждёт!"
+        text += "\n\n🏝 Рюкзак готов — Волга ждёт. Скоро увидимся 😍"
     return text
 
 
