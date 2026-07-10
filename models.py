@@ -5,14 +5,15 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from html import escape
 
-from pricing import ISLAND_ENTRY_PRICE  # вход на остров (оплата при выезде)
+# Вход на остров (оплата при выезде): взрослый и детский (половина взрослого).
+from pricing import CHILD_ISLAND_ENTRY_PRICE, ISLAND_ENTRY_PRICE
 
 # Колонка ID нужна, чтобы синхронизировать статус заявки между чатом и таблицей.
-# «Источник» добавлен в конец, чтобы не сдвигать колонку «Статус» в уже
-# существующих таблицах (по ней ищется строка при смене статуса).
+# «Источник» и «Детских билетов» добавлены в конец, чтобы не сдвигать колонку
+# «Статус» в уже существующих таблицах (по ней ищется строка при смене статуса).
 SHEET_HEADERS = [
     "ID", "Дата", "Имя", "Способ связи", "Контакт", "Username",
-    "Кол-во билетов", "Сумма", "Статус", "Источник",
+    "Кол-во билетов", "Сумма", "Статус", "Источник", "Детских билетов",
 ]
 MAX_TICKETS = 50
 
@@ -38,6 +39,10 @@ TICKET_OPTIONS = [
     TicketOption("quad", "На четверых", 4, 6000),
 ]
 TICKET_OPTIONS_BY_KEY = {o.key: o for o in TICKET_OPTIONS}
+
+# Детский билет — половина взрослого одиночного. Считаем от TICKET_OPTIONS,
+# чтобы при изменении цен не разъезжалось.
+CHILD_TICKET_PRICE = TICKET_OPTIONS_BY_KEY["single"].price // 2
 
 
 def ticket_price_for(count: int) -> int:
@@ -125,9 +130,11 @@ FAQ_ITEMS = [
         "• Одиночный — <b>2100 ₽</b>\n"
         "• На двоих — <b>3600 ₽</b> (по 1800 ₽ с человека)\n"
         "• Групповой на 4-х — <b>6000 ₽</b>\n"
+        f"• Детский — <b>{CHILD_TICKET_PRICE} ₽</b> (половина взрослого)\n"
         "Это сама тусовка: приятная музыка, ночные сеты и уютная атмосфера "
         "летней ночи 🌙\n\n"
-        "🏝 <b>2. Вход на остров</b> — <b>4700 ₽</b>, оплата на месте, при выезде.\n"
+        f"🏝 <b>2. Вход на остров</b> — <b>{ISLAND_ENTRY_PRICE} ₽</b> "
+        f"(детям — <b>{CHILD_ISLAND_ENTRY_PRICE} ₽</b>), оплата на месте, при выезде.\n"
         "Сюда входит:\n"
         "🛥 Трансфер на остров и обратно\n"
         "⛵ Покатушки на катамаранах\n"
@@ -242,6 +249,7 @@ class Application:
     contact: str         # значение контакта: "@user" / "+7..." и т.п.
     username: str        # @username аккаунта (для кнопки менеджера), либо "не задан"
     tickets: int
+    children: int = 0    # детских билетов (по CHILD_TICKET_PRICE, половина взрослого)
     amount: int | None = None  # сумма к оплате в рублях (если известна)
     user_id: int | None = None  # Telegram-id клиента: нужен, чтобы менеджер мог написать
     id: int | None = None  # присваивается хранилищем при сохранении
@@ -307,6 +315,7 @@ class Application:
             str(self.amount) if self.amount else "",
             self.status,
             self.source or "",
+            str(self.children) if self.children else "",
         ]
 
     def to_manager_message(self) -> str:
@@ -321,7 +330,7 @@ class Application:
         # заявок сумма = аванс, on_club = 0 — строку не показываем.
         split = ""
         if self.amount:
-            advance = ticket_price_for(self.tickets)
+            advance = ticket_price_for(self.tickets) + self.children * CHILD_TICKET_PRICE
             on_club = self.amount - advance
             if on_club > 0:
                 split = (
@@ -334,7 +343,8 @@ class Application:
             f"👤 <b>Имя:</b> {escape(self.name)}\n"
             f"🔗 <b>Связь:</b> {escape(self.contact_label)}\n"
             f"💬 <b>Username:</b> {escape(self.username)}\n"
-            f"🎫 <b>Человек:</b> {self.tickets}\n"
+            f"🎫 <b>Человек:</b> {self.tickets}"
+            + (f" + 🧒 детей: {self.children}" if self.children else "") + "\n"
             f"💰 <b>Сумма:</b> {self.amount_label}\n"
             f"{split}"
             f"{extras}"
@@ -347,7 +357,8 @@ class Application:
         """Короткая строка для списка заявок (/leads)."""
         return (
             f"<b>#{self.id}</b> {STATUS_EMOJI.get(self.status, '•')} "
-            f"{escape(self.name)} · {escape(self.contact_label)} · 🎫{self.tickets} "
+            f"{escape(self.name)} · {escape(self.contact_label)} · 🎫{self.tickets}"
+            f"{f'+🧒{self.children}' if self.children else ''} "
             f"· 💰{self.amount_label} · {self.created_at.strftime('%d.%m %H:%M')}"
         )
 
@@ -373,17 +384,26 @@ class Application:
             people_label = "🎫 Билетов"
             # Прямой поток: показываем обе части честно — билет заранее и вход на
             # остров при выезде (доминирующая статья, чтобы не было сюрприза на причале).
-            island_total = self.tickets * ISLAND_ENTRY_PRICE
+            island_total = (self.tickets * ISLAND_ENTRY_PRICE
+                            + self.children * CHILD_ISLAND_ENTRY_PRICE)
+            island_detail = f"{ISLAND_ENTRY_PRICE} ₽ × {self.tickets}"
+            if self.children:
+                island_detail += f" + {CHILD_ISLAND_ENTRY_PRICE} ₽ × {self.children} 🧒"
             cost_block = (
                 f"💰 Билет (оплата заранее): <b>{self.amount_label}</b>\n"
                 f"🏝 Вход на остров при выезде: <b>~{island_total} ₽</b> "
-                f"({ISLAND_ENTRY_PRICE} ₽ × {self.tickets})\n\n"
+                f"({island_detail})\n\n"
             )
+        children_line = (
+            f"🧒 Детских билетов: <b>{self.children}</b> (по {CHILD_TICKET_PRICE} ₽)\n"
+            if self.children else ""
+        )
         return (
             "Почти готово! Проверьте заявку 👇\n\n"
             f"👤 Имя: <b>{escape(self.name)}</b>\n"
             f"🔗 Связь: <b>{escape(self.contact_label)}</b>\n"
             f"{people_label}: <b>{self.tickets}</b>\n"
+            f"{children_line}"
             f"{cost_block}"
             f"{extras}"
             f"{note}\n\n"

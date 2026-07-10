@@ -22,6 +22,8 @@ from keyboards import (
     BTN_NEW_APPLICATION,
     CANCEL_CB,
     cancel_kb,
+    children_ask_kb,
+    children_count_kb,
     confirm_kb,
     contact_method_kb,
     custom_tickets_kb,
@@ -31,6 +33,7 @@ from keyboards import (
     tickets_kb,
 )
 from models import (
+    CHILD_TICKET_PRICE,
     CONTACT_METHODS_BY_KEY,
     INVITE_TEXT,
     MAX_TICKETS,
@@ -38,7 +41,7 @@ from models import (
     Application,
     ticket_price_for,
 )
-from pricing import ISLAND_ENTRY_PRICE
+from pricing import CHILD_ISLAND_ENTRY_PRICE, ISLAND_ENTRY_PRICE
 from services import leads
 
 router = Router()
@@ -54,6 +57,7 @@ class NewLead(StatesGroup):
     method = State()   # выбор способа связи
     contact = State()  # ввод значения контакта
     tickets = State()
+    children = State()  # вопрос про детские билеты (полцены)
     confirm = State()
 
 
@@ -221,7 +225,8 @@ async def _after_contact(message: Message, state: FSMContext) -> None:
     иначе спрашиваем вариант билета как обычно."""
     data = await state.get_data()
     if data.get("tickets") is not None and data.get("amount") is not None:
-        await _to_confirm(message, state, data["tickets"], data["amount"], edit=False)
+        # Из калькулятора состав уже собран — вопрос про детей не задаём.
+        await _to_confirm(message, state, children=0, edit=False)
     else:
         await _ask_tickets(message, state)
 
@@ -298,7 +303,7 @@ async def tickets_custom_step(call: CallbackQuery, state: FSMContext) -> None:
 async def tickets_custom_done(call: CallbackQuery, state: FSMContext) -> None:
     count = int((await state.get_data()).get("custom_count", 2))
     await call.answer()
-    await _to_confirm(call.message, state, count, ticket_price_for(count), edit=True)
+    await _ask_children(call.message, state, count, ticket_price_for(count))
 
 
 # --- шаг 4: вариант билета ------------------------------------------------
@@ -309,7 +314,7 @@ async def got_tickets_button(call: CallbackQuery, state: FSMContext) -> None:
         await call.answer("Этот вариант недоступен", show_alert=True)
         return
     await call.answer()
-    await _to_confirm(call.message, state, option.tickets, option.price, edit=True)
+    await _ask_children(call.message, state, option.tickets, option.price)
 
 
 @router.message(NewLead.tickets, F.text)
@@ -321,11 +326,102 @@ async def got_tickets_text(message: Message, state: FSMContext) -> None:
     )
 
 
-async def _to_confirm(message: Message, state: FSMContext, tickets: int, amount: int,
-                      edit: bool) -> None:
+# --- шаг 4б: детские билеты (полцены от взрослого одиночного) ---------------
+_CHILDREN_PROMPT = (
+    "🧒 <b>Едут ли с вами дети?</b>\n\n"
+    f"Детский билет — <b>{CHILD_TICKET_PRICE} ₽</b>, вход на остров для ребёнка — "
+    f"<b>{CHILD_ISLAND_ENTRY_PRICE} ₽</b> (при выезде).\n"
+    "<i>Всё в 2 раза дешевле взрослого.</i>"
+)
+
+
+def _children_text(count: int) -> str:
+    return (
+        "🧒 <b>Сколько детей?</b>\n\n"
+        f"👶 <b>{count}</b> — детские билеты <b>{count * CHILD_TICKET_PRICE} ₽</b> "
+        f"(по {CHILD_TICKET_PRICE} ₽, оплата заранее)\n"
+        f"🏝 Вход на остров при выезде: <b>~{count * CHILD_ISLAND_ENTRY_PRICE} ₽</b> "
+        f"(по {CHILD_ISLAND_ENTRY_PRICE} ₽)"
+    )
+
+
+async def _ask_children(message: Message, state: FSMContext, tickets: int, amount: int) -> None:
+    """После выбора взрослого билета спрашиваем про детей, затем подтверждение."""
     await state.update_data(tickets=tickets, amount=amount)
-    await state.set_state(NewLead.confirm)
+    await state.set_state(NewLead.children)
+    await message.edit_text(
+        journey.with_step(journey.STAGE_VOLGA, _CHILDREN_PROMPT),
+        reply_markup=children_ask_kb(),
+    )
+
+
+@router.callback_query(NewLead.children, F.data == "children:no")
+async def children_none(call: CallbackQuery, state: FSMContext) -> None:
+    await call.answer()
+    await _to_confirm(call.message, state, children=0, edit=True)
+
+
+@router.callback_query(NewLead.children, F.data == "children:yes")
+async def children_open(call: CallbackQuery, state: FSMContext) -> None:
+    count = int((await state.get_data()).get("children_count", 1))
+    await state.update_data(children_count=count)
+    await call.answer()
+    await call.message.edit_text(_children_text(count), reply_markup=children_count_kb(count))
+
+
+@router.callback_query(NewLead.children, F.data == "children:back")
+async def children_back(call: CallbackQuery, state: FSMContext) -> None:
+    await call.answer()
+    await call.message.edit_text(
+        journey.with_step(journey.STAGE_VOLGA, _CHILDREN_PROMPT),
+        reply_markup=children_ask_kb(),
+    )
+
+
+@router.callback_query(NewLead.children, F.data == "children:noop")
+async def children_noop(call: CallbackQuery) -> None:
+    await call.answer()
+
+
+@router.callback_query(NewLead.children, F.data.in_({"children:inc", "children:dec"}))
+async def children_step(call: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
+    current = int(data.get("children_count", 1))
+    count = max(1, min(current + (1 if call.data.endswith("inc") else -1), MAX_TICKETS))
+    await call.answer()
+    if count == current:
+        return  # уже на границе
+    await state.update_data(children_count=count)
+    try:
+        await call.message.edit_text(_children_text(count), reply_markup=children_count_kb(count))
+    except Exception:  # noqa: BLE001 — текст мог не измениться
+        pass
+
+
+@router.callback_query(NewLead.children, F.data == "children:done")
+async def children_done(call: CallbackQuery, state: FSMContext) -> None:
+    count = int((await state.get_data()).get("children_count", 1))
+    await call.answer()
+    await _to_confirm(call.message, state, children=count, edit=True)
+
+
+@router.message(NewLead.children, F.text)
+async def children_text_fallback(message: Message) -> None:
+    # На этом шаге ждём именно нажатие кнопки.
+    await message.answer(
+        "Пожалуйста, ответьте кнопкой выше 👆",
+        reply_markup=children_ask_kb(),
+    )
+
+
+async def _to_confirm(message: Message, state: FSMContext, *, children: int,
+                      edit: bool) -> None:
+    data = await state.get_data()
+    tickets = data["tickets"]
+    # Детские билеты добавляются поверх взрослой суммы (полцены за каждого).
+    amount = data["amount"] + children * CHILD_TICKET_PRICE
+    await state.update_data(amount=amount, children=children)
+    await state.set_state(NewLead.confirm)
     preview = journey.with_step(
         journey.STAGE_FOREST,
         Application(
@@ -334,6 +430,7 @@ async def _to_confirm(message: Message, state: FSMContext, tickets: int, amount:
             contact=data["contact"],
             username="",
             tickets=tickets,
+            children=children,
             amount=amount,
             extras_note=data.get("extras_note"),
         ).to_user_summary(),
@@ -364,6 +461,7 @@ async def confirm(call: CallbackQuery, state: FSMContext, config: Config) -> Non
         contact=data["contact"],
         username=username,
         tickets=data["tickets"],
+        children=data.get("children", 0),
         amount=data.get("amount"),
         user_id=user.id if user else None,
         extras_note=data.get("extras_note"),

@@ -33,6 +33,7 @@ def init(db_path: str) -> None:
                 username       TEXT    NOT NULL,
                 user_id        INTEGER,
                 tickets        INTEGER NOT NULL,
+                children       INTEGER NOT NULL DEFAULT 0,
                 amount         INTEGER,
                 status         TEXT    NOT NULL,
                 source         TEXT
@@ -43,6 +44,8 @@ def init(db_path: str) -> None:
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(leads)")}
         if "amount" not in columns:
             conn.execute("ALTER TABLE leads ADD COLUMN amount INTEGER")
+        if "children" not in columns:
+            conn.execute("ALTER TABLE leads ADD COLUMN children INTEGER NOT NULL DEFAULT 0")
         if "source" not in columns:
             conn.execute("ALTER TABLE leads ADD COLUMN source TEXT")
         if "contact" not in columns:
@@ -78,6 +81,7 @@ def _row_to_application(row: sqlite3.Row) -> Application:
         username=row["username"],
         user_id=row["user_id"],
         tickets=row["tickets"],
+        children=row["children"] if "children" in row.keys() else 0,
         amount=row["amount"],
         status=row["status"],
         source=row["source"] if "source" in row.keys() else None,
@@ -91,8 +95,8 @@ def add(application: Application) -> Application:
             """
             INSERT INTO leads
                 (created_at, name, contact_method, contact, username,
-                 user_id, tickets, amount, status, source)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 user_id, tickets, children, amount, status, source)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 application.created_at.isoformat(timespec="seconds"),
@@ -102,6 +106,7 @@ def add(application: Application) -> Application:
                 application.username,
                 application.user_id,
                 application.tickets,
+                application.children,
                 application.amount,
                 application.status,
                 application.source,

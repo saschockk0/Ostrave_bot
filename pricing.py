@@ -65,6 +65,9 @@ SUP_PRICE_PER_HOUR = 600  # ₽ за час на сап-борде
 # человек, чтобы итог калькулятора показывал честную сумму поездки.
 ISLAND_ENTRY_PRICE = 4700  # ₽ с человека
 
+# Детям вход на остров (проживание за выходные) — в 2 раза дешевле взрослого.
+CHILD_ISLAND_ENTRY_PRICE = ISLAND_ENTRY_PRICE // 2  # ₽ с ребёнка
+
 EXTRA_EQUIPMENT = [
     PriceItem("sleepingSet", "🛌 Спальный комплект", 600),
     PriceItem("tableSet",    "🪑 Стол с табуретками", 700),

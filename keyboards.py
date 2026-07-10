@@ -182,6 +182,33 @@ def custom_tickets_kb(count: int) -> InlineKeyboardMarkup:
     )
 
 
+def children_ask_kb() -> InlineKeyboardMarkup:
+    """Вопрос «едут ли дети?» после выбора взрослого билета."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🧒 Да, добавить детский билет", callback_data="children:yes")],
+            [InlineKeyboardButton(text="Нет, только взрослые", callback_data="children:no")],
+            _cancel_inline_row,
+        ]
+    )
+
+
+def children_count_kb(count: int) -> InlineKeyboardMarkup:
+    """Степпер количества детских билетов (полцены от взрослого одиночного)."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="−", callback_data="children:dec"),
+                InlineKeyboardButton(text=f"{count} дет.", callback_data="children:noop"),
+                InlineKeyboardButton(text="+", callback_data="children:inc"),
+            ],
+            [InlineKeyboardButton(text="✅ Готово", callback_data="children:done")],
+            [InlineKeyboardButton(text="◀ Назад", callback_data="children:back")],
+            _cancel_inline_row,
+        ]
+    )
+
+
 def confirm_kb() -> InlineKeyboardMarkup:
     """Подтверждение/отмена заявки."""
     return InlineKeyboardMarkup(
