@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from models import STATUS_IN_PROGRESS, STATUS_NEW, STATUS_PAID
 
@@ -174,6 +174,54 @@ def seed_from_fsm(fsm_db_path: str) -> None:
                 "VALUES(?, ?, ?)",
                 (user_id, now, now),
             )
+
+
+# --- мониторинг реестра (команда /users в чате менеджеров) -------------------
+def overview() -> dict[str, int]:
+    """Сводка по реестру: размер базы, приток новых и живая активность.
+
+    Даты в users хранятся ISO-строками фиксированного формата, поэтому
+    сравнение строк в SQL эквивалентно сравнению дат.
+    """
+    now = datetime.now()
+    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_ago = now - timedelta(days=7)
+    queries = {
+        "total": ("SELECT COUNT(*) FROM users", ()),
+        "blocked": ("SELECT COUNT(*) FROM users WHERE blocked = 1", ()),
+        "muted": ("SELECT COUNT(*) FROM users WHERE muted = 1 AND blocked = 0", ()),
+        "new_today": ("SELECT COUNT(*) FROM users WHERE first_seen >= ?",
+                      (today.isoformat(timespec="seconds"),)),
+        "new_week": ("SELECT COUNT(*) FROM users WHERE first_seen >= ?",
+                     (week_ago.isoformat(timespec="seconds"),)),
+        "active_today": ("SELECT COUNT(*) FROM users WHERE last_seen >= ?",
+                         (today.isoformat(timespec="seconds"),)),
+        "active_week": ("SELECT COUNT(*) FROM users WHERE last_seen >= ?",
+                        (week_ago.isoformat(timespec="seconds"),)),
+    }
+    with _connect() as conn:
+        return {
+            key: conn.execute(sql, params).fetchone()[0]
+            for key, (sql, params) in queries.items()
+        }
+
+
+def recent_users(limit: int = 10, offset: int = 0) -> list[dict]:
+    """Страница последних активных пользователей (по last_seen, новые сверху).
+
+    К каждому подтягивается статус его последней заявки (None — заявок нет):
+    та же семантика «последняя заявка юзера», что и в сегментах unpaid/paid.
+    """
+    query = (
+        "SELECT u.user_id, u.username, u.first_name, u.first_seen, u.last_seen, "
+        "       u.source, u.blocked, u.muted, "
+        "       (SELECT status FROM leads "
+        "        WHERE user_id = u.user_id ORDER BY id DESC LIMIT 1) AS lead_status "
+        "FROM users u ORDER BY u.last_seen DESC, u.user_id LIMIT ? OFFSET ?"
+    )
+    with _connect() as conn:
+        conn.row_factory = sqlite3.Row
+        return [dict(row) for row in conn.execute(query, (limit, offset))]
 
 
 # --- сегменты для рассылок ---------------------------------------------------

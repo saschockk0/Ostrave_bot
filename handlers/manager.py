@@ -4,20 +4,28 @@
   • inline-кнопки статуса под каждой заявкой;
   • /leads — последние заявки и сводка по статусам;
   • /lead <id> — карточка конкретной заявки с кнопками управления;
-  • /stats — сводка за день/неделю/всё время + разбивка по статусам.
+  • /stats — сводка за день/неделю/всё время + разбивка по статусам;
+  • /users — мониторинг реестра пользователей: сводка, сегменты, список.
 """
 from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
+from html import escape
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command, CommandObject
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
 from config import Config
 from models import STATUS_EMOJI, STATUS_PAID, status_label
-from services import sheets, storage
+from services import sheets, storage, users
 from services.leads import emit_lead_card
 
 logger = logging.getLogger(__name__)
@@ -133,6 +141,112 @@ async def cmd_stats(message: Message, config: Config) -> None:
         lines += ["", f"💳 Конверсия в оплату: <b>{conv}%</b> ({paid}/{total['count']})"]
 
     await message.answer("\n".join(lines))
+
+
+# --- /users — мониторинг реестра пользователей ----------------------------
+_USERS_PAGE_SIZE = 10
+
+
+def _fmt_seen(iso: str) -> str:
+    try:
+        return datetime.fromisoformat(iso).strftime("%d.%m %H:%M")
+    except ValueError:  # чужеродное значение в БД — покажем как есть
+        return iso
+
+
+def _user_line(row: dict) -> str:
+    """Одна строка списка: метка · имя · @username · id · активность · источник."""
+    if row["blocked"]:
+        mark = "🚫"
+    elif row["muted"]:
+        mark = "🔕"
+    elif row["lead_status"]:
+        mark = STATUS_EMOJI.get(row["lead_status"], "•")
+    else:
+        mark = "🤔"  # писал боту, но заявки нет — как сегмент «Думают»
+    name = escape(row["first_name"] or "Без имени")
+    uname = f" @{escape(row['username'])}" if row["username"] else ""
+    source = f" · 📈 {escape(row['source'])}" if row["source"] else ""
+    return (
+        f"{mark} <b>{name}</b>{uname} <code>{row['user_id']}</code>"
+        f" — {_fmt_seen(row['last_seen'])}{source}"
+    )
+
+
+def _users_page(offset: int, config: Config) -> tuple[str, InlineKeyboardMarkup | None]:
+    """Текст и клавиатура страницы /users; вынесено для команды и листания."""
+    stats = users.overview()
+    total = stats["total"]
+    if not total:
+        return "👥 <b>Пользователи бота</b>\n\nПока никто не писал боту.", None
+
+    # Не даём улистать за край: реестр мог сжаться между нажатиями.
+    offset = max(0, min(offset, (total - 1) // _USERS_PAGE_SIZE * _USERS_PAGE_SIZE))
+    rows = users.recent_users(limit=_USERS_PAGE_SIZE, offset=offset)
+    segments = users.segment_counts(config.fsm_db_path)
+
+    lines = [
+        "👥 <b>Пользователи бота</b>",
+        "",
+        f"∑ Всего: <b>{total}</b> · 🚫 заблокировали: <b>{stats['blocked']}</b>"
+        f" · 🔕 отписались: <b>{stats['muted']}</b>",
+        f"🆕 Новые: сегодня <b>{stats['new_today']}</b> · 7 дней <b>{stats['new_week']}</b>",
+        f"⚡️ Активные: сегодня <b>{stats['active_today']}</b>"
+        f" · 7 дней <b>{stats['active_week']}</b>",
+        "",
+        "<b>Сегменты рассылок:</b>",
+    ]
+    lines += [f"{label}: <b>{segments[key]}</b>" for key, label in users.SEGMENTS.items()]
+    lines += [
+        "",
+        f"<b>Последние активные</b> ({offset + 1}–{offset + len(rows)} из {total}):",
+    ]
+    lines += [_user_line(row) for row in rows]
+    lines += [
+        "",
+        "<i>Метка — статус последней заявки; 🤔 без заявки, "
+        "🚫 заблокировал бота, 🔕 отписался от рассылок.</i>",
+    ]
+
+    nav = []
+    if offset > 0:
+        nav.append(InlineKeyboardButton(
+            text="⬅️ Новее", callback_data=f"users:page:{offset - _USERS_PAGE_SIZE}",
+        ))
+    nav.append(InlineKeyboardButton(text="🔄 Обновить", callback_data=f"users:page:{offset}"))
+    if offset + _USERS_PAGE_SIZE < total:
+        nav.append(InlineKeyboardButton(
+            text="Раньше ➡️", callback_data=f"users:page:{offset + _USERS_PAGE_SIZE}",
+        ))
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=[nav])
+
+
+@router.message(Command("users"))
+async def cmd_users(message: Message, config: Config) -> None:
+    if not _is_managers_chat(message.chat.id, config):
+        await message.answer("Эта команда доступна только в чате менеджеров.")
+        return
+    text, kb = _users_page(0, config)
+    await message.answer(text, reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("users:page:"))
+async def users_page(call: CallbackQuery, config: Config) -> None:
+    if not _is_managers_chat(call.message.chat.id, config):
+        await call.answer("Доступно только менеджерам", show_alert=True)
+        return
+    raw_offset = call.data.rsplit(":", 1)[1]
+    if not raw_offset.isdigit():
+        await call.answer("Некорректная страница", show_alert=True)
+        return
+    text, kb = _users_page(int(raw_offset), config)
+    try:
+        await call.message.edit_text(text, reply_markup=kb)
+    except TelegramBadRequest as exc:
+        # «Обновить» без изменений в реестре — Telegram отвергает то же сообщение.
+        if "message is not modified" not in str(exc):
+            raise
+    await call.answer("Обновлено")
 
 
 # --- /lead <id> — карточка с кнопками ------------------------------------
