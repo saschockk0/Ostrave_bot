@@ -8,7 +8,7 @@
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 
@@ -60,7 +60,7 @@ def suggest_canopy_key(people: int) -> str:
 SUP_PRICE_PER_HOUR = 600  # ₽ за час на сап-борде
 
 # Вход на остров — обязательный для каждого гостя, оплата на месте при выезде.
-# Покрывает трансфер на остров и обратно, катамараны и баню (см. FAQ «price»).
+# Покрывает трансфер на остров и обратно, парусные катамараны и баню (см. FAQ «price»).
 # Это второй слой цены поверх билета на open air, поэтому считаем его на всех
 # человек, чтобы итог калькулятора показывал честную сумму поездки.
 ISLAND_ENTRY_PRICE = 4700  # ₽ с человека
@@ -110,6 +110,8 @@ class Quote:
     breakdown: list[tuple[str, int]]  # (подпись позиции, сумма ₽)
     advance: int = 0                  # платится сейчас переводом (бронь) — билет на open air
     on_site: int = 0                  # платится на острове при выезде — вход + аренда
+    advance_items: list[tuple[str, int]] = field(default_factory=list)  # позиции «сейчас переводом»
+    on_site_items: list[tuple[str, int]] = field(default_factory=list)  # позиции «на острове при выезде»
 
     def summary_text(self) -> str:
         """Состав расчёта построчно — для заявки и сообщения менеджеру."""
@@ -141,9 +143,9 @@ def build_quote(
     people = max(0, int(people))
     sup_hours = max(0, int(sup_hours))
 
-    breakdown: list[tuple[str, int]] = []
+    advance_items: list[tuple[str, int]] = []  # платится сейчас переводом (бронь)
+    on_site_items: list[tuple[str, int]] = []  # платится на острове при выезде
     total = 0
-    advance = 0  # оплата переводом сейчас (бронь) — только билет на open air
 
     # Слой 1 — билет на open air (сама тусовка), оплата заранее переводом.
     if people > 0:
@@ -154,14 +156,13 @@ def build_quote(
         else:
             amount = max(0, int(open_air_total))
             label = f"🎟 Билет на open air ×{people}"
-        breakdown.append((label, amount))
+        advance_items.append((label, amount))
         total += amount
-        advance += amount
 
-    # Слой 2 — вход на остров (трансфер, катамараны, баня), оплата при выезде.
+    # Слой 2 — вход на остров (трансфер, парусные катамараны, баня), оплата при выезде.
     if people > 0:
         amount = people * ISLAND_ENTRY_PRICE
-        breakdown.append(
+        on_site_items.append(
             (f"🏝 Вход на остров ×{people} (по {ISLAND_ENTRY_PRICE} ₽)", amount)
         )
         total += amount
@@ -171,7 +172,7 @@ def build_quote(
         qty = max(0, int(tents.get(item.key, 0)))
         if qty:
             amount = qty * item.price
-            breakdown.append((f"{item.label} ×{qty}", amount))
+            on_site_items.append((f"{item.label} ×{qty}", amount))
             total += amount
 
     # Кухня-шатёр — общий навес-кухня на всю компанию (как на Ostrov2).
@@ -179,13 +180,13 @@ def build_quote(
         qty = max(0, int(canopies.get(item.key, 0)))
         if qty:
             amount = qty * item.price
-            breakdown.append((f"{item.label} ×{qty}", amount))
+            on_site_items.append((f"{item.label} ×{qty}", amount))
             total += amount
 
     # Сап-борд по часам.
     if sup_hours:
         amount = sup_hours * SUP_PRICE_PER_HOUR
-        breakdown.append((f"🏄 Сап-борд ×{sup_hours} ч", amount))
+        on_site_items.append((f"🏄 Сап-борд ×{sup_hours} ч", amount))
         total += amount
 
     # Доп. снаряжение.
@@ -193,14 +194,17 @@ def build_quote(
         qty = max(0, int(equipment.get(item.key, 0)))
         if qty:
             amount = qty * item.price
-            breakdown.append((f"{item.label} ×{qty}", amount))
+            on_site_items.append((f"{item.label} ×{qty}", amount))
             total += amount
 
+    advance = sum(a for _, a in advance_items)
     return Quote(
         people=people,
         ticket_price=current_ticket_price(today),  # базовая ставка (для справки)
         total=total,
-        breakdown=breakdown,
+        breakdown=advance_items + on_site_items,
         advance=advance,
         on_site=total - advance,  # вход на остров + вся аренда — оплата при выезде
+        advance_items=advance_items,
+        on_site_items=on_site_items,
     )
