@@ -153,7 +153,7 @@ def build_quote(
             label = f"🎟 Билет на open air ×{people} (по {tp} ₽)"
         else:
             amount = max(0, int(open_air_total))
-            label = f"🎟 Билет на open air ×{people} (тариф «на четверых»)"
+            label = f"🎟 Билет на open air ×{people}"
         breakdown.append((label, amount))
         total += amount
         advance += amount
@@ -162,7 +162,7 @@ def build_quote(
     if people > 0:
         amount = people * ISLAND_ENTRY_PRICE
         breakdown.append(
-            (f"🏝 Вход на остров ×{people} (по {ISLAND_ENTRY_PRICE} ₽, при выезде)", amount)
+            (f"🏝 Вход на остров ×{people} (по {ISLAND_ENTRY_PRICE} ₽)", amount)
         )
         total += amount
 
