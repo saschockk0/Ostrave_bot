@@ -96,12 +96,27 @@ def _has_canopy(data: dict) -> bool:
     return any(int(data.get(k, 0)) for k in CANOPY_TYPES_BY_KEY)
 
 
+def _totals_block(quote: Quote) -> str:
+    """Итог с разбивкой по моменту оплаты: аванс переводом сейчас и остальное на острове.
+
+    Так человек сразу видит, что переводом бронирует только билет, а бо́льшая
+    часть (вход на остров + аренда) платится на месте при выезде.
+    """
+    lines: list[str] = []
+    if quote.advance:
+        lines.append(f"💳 <b>Сейчас переводом</b> (бронь): {quote.advance} ₽")
+    if quote.on_site:
+        lines.append(f"🏝 <b>На острове</b> при выезде: {quote.on_site} ₽")
+    lines.append(f"💰 <b>Всего за поездку: {quote.total} ₽</b>")
+    return "\n".join(lines)
+
+
 def _render_cart(data: dict) -> tuple[str, object]:
     """Текст экрана-чека (живая разбивка + итог) и клавиатура услуг."""
     quote = _quote(data)
     lines = "\n".join(f"• {label} — {amount} ₽" for label, amount in quote.breakdown)
     check = f"🧾 <b>В чеке:</b>\n{lines}\n\n" if lines else ""
-    text = f"{_CART_INTRO}\n\n{check}💰 <b>Итого: {quote.total} ₽</b>"
+    text = f"{_CART_INTRO}\n\n{check}{_totals_block(quote)}"
     if _has_canopy(data):
         text += f"\n\n{_CANOPY_INCLUDES}"
     return text, calc_cart_kb(data)
@@ -196,10 +211,10 @@ async def calc_done(call: CallbackQuery, state: FSMContext) -> None:
         "Вот из чего сложатся три дня на берегу:\n\n"
         f"{quote.summary_text()}\n"
         "─────────────\n"
-        f"💰 <b>Итого: {quote.total} ₽</b>\n\n"
-        "ℹ️ В сумму входят билет на open air, вход на остров (трансфер, катамараны, "
-        "баня — оплата при выезде), аренда палаток и кухни-шатра, сап и снаряжение. "
-        "Финальную стоимость подтвердит менеджер."
+        f"{_totals_block(quote)}\n\n"
+        "ℹ️ Переводом бронируешь только билет на open air — вход на остров и "
+        "аренда оплачиваются на месте при выезде. Финальную стоимость подтвердит "
+        "менеджер."
         f"{canopy_note}\n\n"
         "🌅 Останется только собрать своих и приехать на Волгу."
     )

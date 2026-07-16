@@ -108,6 +108,8 @@ class Quote:
     ticket_price: int                 # цена билета за человека на момент расчёта
     total: int                        # итог в рублях
     breakdown: list[tuple[str, int]]  # (подпись позиции, сумма ₽)
+    advance: int = 0                  # платится сейчас переводом (бронь) — билет на open air
+    on_site: int = 0                  # платится на острове при выезде — вход + аренда
 
     def summary_text(self) -> str:
         """Состав расчёта построчно — для заявки и сообщения менеджеру."""
@@ -141,6 +143,7 @@ def build_quote(
 
     breakdown: list[tuple[str, int]] = []
     total = 0
+    advance = 0  # оплата переводом сейчас (бронь) — только билет на open air
 
     # Слой 1 — билет на open air (сама тусовка), оплата заранее переводом.
     if people > 0:
@@ -153,6 +156,7 @@ def build_quote(
             label = f"🎟 Билет на open air ×{people} (тариф «на четверых»)"
         breakdown.append((label, amount))
         total += amount
+        advance += amount
 
     # Слой 2 — вход на остров (трансфер, катамараны, баня), оплата при выезде.
     if people > 0:
@@ -197,4 +201,6 @@ def build_quote(
         ticket_price=current_ticket_price(today),  # базовая ставка (для справки)
         total=total,
         breakdown=breakdown,
+        advance=advance,
+        on_site=total - advance,  # вход на остров + вся аренда — оплата при выезде
     )
