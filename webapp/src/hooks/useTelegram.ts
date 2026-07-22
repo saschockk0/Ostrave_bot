@@ -42,8 +42,8 @@ export function useTelegram() {
     try {
       tg.ready();
       tg.expand();
-      tg.setHeaderColor?.("#f5821f");
-      tg.setBackgroundColor?.("#fbf7ee");
+      tg.setHeaderColor?.("#0b2431");
+      tg.setBackgroundColor?.("#0b2431");
     } catch {
       /* вне Telegram просто игнорируем */
     }

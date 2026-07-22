@@ -39,7 +39,7 @@ async def on_webapp_data(message: Message, config: Config) -> None:
             user_id=user.id if user else None,
         )
     except ValueError:
-        await message.answer("Кажется, не хватает данных 🙈 Откройте форму и заполните имя и телефон.")
+        await message.answer("Кажется, не хватает данных 🙈 Откройте форму и заполните имя и контакт.")
         return
 
     application = await leads.submit_application(message.bot, config, application)

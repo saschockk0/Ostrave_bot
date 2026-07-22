@@ -1,4 +1,3 @@
-import { Marquee } from "../components/Marquee";
 import { event } from "../data/event";
 import { useTelegram } from "../hooks/useTelegram";
 
@@ -12,36 +11,50 @@ export function Venue() {
   };
 
   return (
-    <section className="border-t-[3px] border-ink bg-ink text-paper">
-      <Marquee
-        reverse
-        items={["как добраться", "парусный клуб «остров»", "берег, лес и причал"]}
-        className="border-b-[3px] border-paper/25 py-2 font-marker text-2xl text-orange"
-      />
+    <section className="px-5 py-14">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <h2 className="font-display text-3xl font-bold leading-tight">Где встречаемся</h2>
+        <span className="font-script text-2xl text-leaf">как добраться</span>
+      </div>
 
-      <div className="grid gap-8 px-4 py-14 md:grid-cols-2">
-        <div>
-          <h2 className="font-display text-4xl font-black uppercase leading-[0.9]">
-            Где
-            <br />
-            встречаемся
-          </h2>
-          <p className="mt-4 max-w-[42ch] font-body text-paper/70">
-            Парусный клуб «Остров» на берегу: лес, вода и причал. Точное время сбора и
-            дорогу пришлём в личку после заявки.
+      <p className="mt-4 max-w-[42ch] font-body text-foam/70">
+        Точка сбора — причал «Новомелково», местные таксисты знают его как
+        «причал МИФИ». {event.transfer} — и ты в маленьком раю 🏝
+      </p>
+
+      <div className="mt-6 grid gap-4">
+        <div className="border-l-2 border-leaf pl-4">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-leaf">
+            🚗 На машине
+          </p>
+          <p className="mt-1 font-body text-sm text-foam/70">
+            Кидаешь координаты в навигатор — и маршрут до причала готов. {event.parking}.
           </p>
         </div>
-
-        <div className="border-[3px] border-orange p-6">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-orange">Локация</p>
-          <p className="mt-2 font-display text-2xl font-extrabold">{event.venue}</p>
-          <button
-            onClick={openMap}
-            className="mt-6 w-full border-[3px] border-orange bg-orange px-5 py-3 font-display font-extrabold uppercase tracking-tight text-ink shadow-[5px_5px_0_#fbf7ee] transition active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
-          >
-            Построить маршрут →
-          </button>
+        <div className="border-l-2 border-leaf pl-4">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-leaf">
+            🚆 Без машины
+          </p>
+          <p className="mt-1 font-body text-sm text-foam/70">
+            С Ленинградского вокзала — до станции Редкино, дальше такси до причала.{" "}
+            {event.taxi.name}: <span className="font-mono">{event.taxi.phone}</span>. В пик
+            ждать можно до часа — заказывай заранее!
+          </p>
         </div>
+      </div>
+
+      <div className="mt-8 rounded-2xl border border-foam/15 bg-foam/[0.04] p-6">
+        <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-foam/60">
+          📍 Точка сбора
+        </p>
+        <p className="mt-2 font-display text-xl font-bold">{event.pier}</p>
+        <p className="mt-1 font-mono text-sm text-foam/60">{event.coords}</p>
+        <button
+          onClick={openMap}
+          className="mt-6 w-full rounded-full bg-foam px-6 py-3.5 font-display font-bold text-deep transition active:scale-[0.98]"
+        >
+          Построить маршрут →
+        </button>
       </div>
     </section>
   );
