@@ -54,14 +54,20 @@ npm run typecheck  # проверка типов
 ## Подключение к Telegram
 
 1. **Хостинг.** Залейте `dist/` на любой HTTPS-хостинг (Vercel / Netlify / GitHub
-   Pages / свой сервер). Telegram Mini App требует HTTPS.
-2. **BotFather.** У бота: `/newapp` (или `Bot Settings → Web App`), укажите
-   URL вашего хостинга. Либо добавьте кнопку:
-   - **меню-кнопка**: `Bot Settings → Menu Button → URL`;
-   - **reply-кнопка**: `KeyboardButton(text="Открыть афишу", web_app=WebAppInfo(url=...))`.
-3. **Приём заявки.** Форма вызывает `tg.sendData(JSON.stringify(payload))`.
-   `sendData` доставляет данные боту как `message.web_app_data` **только если
-   Mini App открыт reply-кнопкой `web_app`**. Payload:
+   Pages / свой сервер). Telegram Mini App требует HTTPS. Прод живёт на
+   `https://pkostrov.ru/afisha/` — статика в `/var/www/afisha`, конфиг nginx
+   лежит в репозитории: `../deploy/nginx-afisha.conf`.
+2. **Кнопки.** Достаточно задать боту `WEBAPP_URL` — он сам ставит афишу
+   и первым рядом reply-меню (`keyboards.main_kb`), и на кнопку «Меню» у поля
+   ввода (`set_chat_menu_button` в `bot.py`). В BotFather ничего делать не нужно.
+3. **Приём заявки.** Форма шлёт `POST api/application` (относительно адреса
+   аппа → `/afisha/api/application`) с телом `{init_data, application}`;
+   nginx проксирует его в бота на `127.0.0.1:8081`, а `services/webapi.py`
+   проверяет подпись `initData` на токене бота. Запасной путь — старый
+   `tg.sendData(...)`: он доставляет данные как `message.web_app_data`, но
+   **только если Mini App открыт reply-кнопкой `web_app`** (из кнопки «Меню»
+   молча ничего не отправляет — ради этого и появился HTTP-приём). Payload
+   `application`:
 
    ```json
    {
@@ -81,11 +87,11 @@ npm run typecheck  # проверка типов
 
 ## Связка с ботом (в каталоге `../`)
 
-Бот уже принимает заявки из Mini App: `handlers/webapp.py` ловит
-`F.web_app_data`, строит `models.Application.from_webapp` (сумма считается
-на стороне бота: тариф + детские билеты) и отдаёт в тот же
-`services/leads.submit_application`, что и диалог в чате — заявка падает
-в чат менеджеров и в Google-таблицу.
+Бот принимает заявки из Mini App двумя путями: `services/webapi.py` (HTTP,
+основной) и `handlers/webapp.py` (`F.web_app_data`, запасной). Оба строят
+`models.Application.from_webapp` (сумма считается на стороне бота: тариф +
+детские билеты) и отдают в тот же `services/leads.submit_application`, что и
+диалог в чате — заявка падает в чат менеджеров и в Google-таблицу.
 
 ## Что заменить перед продакшеном
 - `src/data/event.ts` → реальная ссылка на карту (`mapUrl`), год, программа.

@@ -9,7 +9,12 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.base import BaseStorage
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand
+from aiogram.types import (
+    BotCommand,
+    MenuButtonCommands,
+    MenuButtonWebApp,
+    WebAppInfo,
+)
 
 from config import load_config
 from handlers import setup_routers
@@ -17,7 +22,7 @@ from logging_setup import setup_logging
 from middlewares.fsm_timeout import FSMTimeoutMiddleware
 from middlewares.topic_guard import TopicGuardMiddleware
 from middlewares.track_users import TrackUsersMiddleware
-from services import reminders, storage, users
+from services import reminders, storage, users, webapi
 from services.fsm_storage import SQLiteStorage
 
 logger = logging.getLogger(__name__)
@@ -41,6 +46,24 @@ async def _set_commands(bot: Bot) -> None:
             BotCommand(command="calc", description="Калькулятор стоимости"),
         ]
     )
+
+
+async def _set_menu_button(bot: Bot, webapp_url: str) -> None:
+    """Кнопка «Меню» слева от поля ввода.
+
+    С заданным WEBAPP_URL она открывает афишу (Mini App), иначе — обычный
+    список команд. Ставим на каждом старте, чтобы настройка ехала вместе с
+    кодом и не жила только в BotFather.
+    """
+    button = (
+        MenuButtonWebApp(text="Афиша", web_app=WebAppInfo(url=webapp_url))
+        if webapp_url
+        else MenuButtonCommands()
+    )
+    try:
+        await bot.set_chat_menu_button(menu_button=button)
+    except Exception:  # noqa: BLE001 — кнопка не критична, бот должен подняться
+        logger.exception("Не удалось настроить кнопку «Меню»")
 
 
 async def main() -> None:
@@ -72,14 +95,20 @@ async def main() -> None:
     dp.include_router(setup_routers())
 
     await _set_commands(bot)
+    await _set_menu_button(bot, config.webapp_url)
     # Фон: напоминания бросившим заявку. Ссылку держим, чтобы задачу не собрал GC.
     reminders_task = asyncio.create_task(reminders.run_loop(bot, config))
+    # Заявки из афиши, открытой кнопкой «Меню»: sendData оттуда не работает,
+    # форма шлёт их POST-ом на локальный порт (наружу его отдаёт nginx).
+    api_runner = await webapi.start(bot, config)
     # config доступен во всех хендлерах как параметр `config: Config`.
     await bot.delete_webhook(drop_pending_updates=True)
     try:
         await dp.start_polling(bot, config=config)
     finally:
         reminders_task.cancel()
+        if api_runner is not None:
+            await api_runner.cleanup()
 
 
 if __name__ == "__main__":

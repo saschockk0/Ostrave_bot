@@ -15,6 +15,9 @@ export type TgWebApp = {
     notificationOccurred: (type: "error" | "success" | "warning") => void;
     selectionChanged: () => void;
   };
+  // Подписанная строка запуска: ею бот проверяет, что заявка пришла от
+  // настоящего пользователя Telegram (см. services/webapi.py).
+  initData?: string;
   initDataUnsafe?: {
     user?: { id: number; username?: string; first_name?: string };
   };
@@ -58,5 +61,5 @@ export function useTelegram() {
     }
   };
 
-  return { tg, ready, haptic, user: tg?.initDataUnsafe?.user };
+  return { tg, ready, haptic, user: tg?.initDataUnsafe?.user, initData: tg?.initData };
 }

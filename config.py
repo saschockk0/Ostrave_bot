@@ -71,12 +71,25 @@ class Config:
     # message_thread_id топика в группе менеджеров, куда слать заявки.
     # 0 — без топика (обычный чат / тема «General»).
     managers_topic_id: int = 0
+    # Локальный HTTP-приём заявок из Mini App (services/webapi.py).
+    # Порт 0 — приём выключен (тогда заявка доходит только из reply-кнопки).
+    webapp_api_host: str = "127.0.0.1"
+    webapp_api_port: int = 0
     # Файл FSM-хранилища: его же читают сегмент «бросили заявку» и напоминания.
     fsm_db_path: str = "fsm.db"
 
 
 def load_config() -> Config:
     managers_chat_id, topic_from_chat = _parse_managers_chat_id(_require("MANAGERS_CHAT_ID"))
+    webapp_url = os.getenv("WEBAPP_URL", "").strip()
+    # Приём заявок по HTTP нужен только вместе с Mini App: из кнопки «Меню»
+    # sendData не работает, форма шлёт заявку POST-ом (services/webapi.py).
+    api_port_env = os.getenv("WEBAPP_API_PORT", "").strip()
+    webapp_api_port = (
+        _parse_int_env("WEBAPP_API_PORT", api_port_env)
+        if api_port_env
+        else (8081 if webapp_url else 0)
+    )
     # Явный MANAGERS_TOPIC_ID имеет приоритет; иначе берём топик из
     # комбинированного MANAGERS_CHAT_ID (формат «-100…/127»).
     topic_env = os.getenv("MANAGERS_TOPIC_ID", "").strip()
@@ -86,7 +99,7 @@ def load_config() -> Config:
         managers_chat_id=managers_chat_id,
         # WEBAPP_URL опционален: основной путь — заявка прямо в чате.
         # Если задан, бот дополнительно покажет кнопку с Mini App-афишей.
-        webapp_url=os.getenv("WEBAPP_URL", ""),
+        webapp_url=webapp_url,
         # Файл локальной БД заявок (источник правды для менеджеров).
         db_path=os.getenv("DB_PATH", "leads.db"),
         # GSHEET_ID и creds опциональны: без них запись в таблицу просто отключается.
@@ -96,4 +109,6 @@ def load_config() -> Config:
         # (Необязательно) топик в группе менеджеров. Узнать id: /chatinfo в топике.
         managers_topic_id=managers_topic_id,
         fsm_db_path=os.getenv("FSM_DB_PATH", "fsm.db"),
+        webapp_api_host=os.getenv("WEBAPP_API_HOST", "127.0.0.1").strip(),
+        webapp_api_port=webapp_api_port,
     )

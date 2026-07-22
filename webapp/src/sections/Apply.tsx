@@ -14,6 +14,11 @@ import {
 const PHONE_RE = /^\+?\d[\d\s\-()]{7,}$/;
 const USERNAME_RE = /^@?[a-zA-Z0-9_]{4,}$/;
 
+// Приём заявок ботом (services/webapi.py), относительный путь: апп лежит на
+// /afisha/, nginx проксирует /afisha/api/ внутрь бота. sendData тут не годится —
+// из кнопки «Меню» у поля ввода он ничего не отправляет.
+const API_URL = "api/application";
+
 // Способы связи — как в диалоге бота (models.CONTACT_METHODS).
 const CONTACT_METHODS = [
   { key: "telegram", label: "Telegram", emoji: "💬", placeholder: "@username" },
@@ -60,7 +65,7 @@ function Stepper({
 }
 
 export function Apply({ sectionRef }: { sectionRef: RefObject<HTMLElement> }) {
-  const { tg, haptic, user } = useTelegram();
+  const { tg, haptic, user, initData } = useTelegram();
 
   const [name, setName] = useState(user?.first_name ?? "");
   const [method, setMethod] = useState<MethodKey>("telegram");
@@ -70,6 +75,8 @@ export function Apply({ sectionRef }: { sectionRef: RefObject<HTMLElement> }) {
   const [children, setChildren] = useState(0);
   const [errors, setErrors] = useState<Errors>({});
   const [done, setDone] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
 
   // Telegram с @username в профиле — контакт подставляется сам, как в боте.
   const autoUsername = method === "telegram" && user?.username ? `@${user.username}` : null;
@@ -78,7 +85,8 @@ export function Apply({ sectionRef }: { sectionRef: RefObject<HTMLElement> }) {
   const ticketCost = ticketPriceFor(tickets) + children * CHILD_TICKET_PRICE;
   const islandCost = tickets * ISLAND_ENTRY_PRICE + children * CHILD_ISLAND_ENTRY_PRICE;
 
-  const submit = () => {
+  const submit = async () => {
+    if (sending) return;
     const next: Errors = {};
     const contactValue = (autoUsername ?? contact).trim();
     if (name.trim().length < 2) next.name = "Как вас зовут?";
@@ -110,15 +118,51 @@ export function Apply({ sectionRef }: { sectionRef: RefObject<HTMLElement> }) {
     };
 
     haptic("medium");
-    if (tg?.sendData) {
-      // Отправляет данные боту и закрывает Mini App
-      // (работает, когда приложение открыто кнопкой web_app в боте).
-      tg.sendData(JSON.stringify(payload));
-    } else {
-      // Локальная разработка / запуск вне Telegram.
-      console.log("Заявка:", payload);
-      setDone(true);
+    setFailed(false);
+
+    // Основной путь: POST боту с подписью initData — работает независимо от
+    // того, откуда открыли афишу (кнопка «Меню», reply-кнопка, ссылка).
+    if (initData) {
+      setSending(true);
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ init_data: initData, application: payload }),
+        });
+        const data = await res.json();
+        if (res.ok && data?.ok) {
+          haptic("rigid");
+          setDone(true);
+          return;
+        }
+        throw new Error(String(data?.error ?? res.status));
+      } catch (err) {
+        console.warn("Заявку не приняли по HTTP:", err);
+      } finally {
+        setSending(false);
+      }
     }
+
+    if (tg?.sendData) {
+      // Запасной путь: доставка боту сообщением. Работает, только если апп
+      // открыт reply-кнопкой web_app; заодно закрывает Mini App.
+      try {
+        tg.sendData(JSON.stringify(payload));
+        return;
+      } catch (err) {
+        console.warn("sendData недоступен:", err);
+      }
+    }
+    if (initData) {
+      // В Telegram, но отправить не вышло — честно говорим об этом.
+      haptic("heavy");
+      setFailed(true);
+      return;
+    }
+    // Локальная разработка / запуск вне Telegram.
+    console.log("Заявка:", payload);
+    setDone(true);
   };
 
   const label = "font-mono text-[11px] uppercase tracking-[0.2em] text-foam/60";
@@ -281,12 +325,20 @@ export function Apply({ sectionRef }: { sectionRef: RefObject<HTMLElement> }) {
             </p>
           </div>
 
+          {failed && (
+            <p className="font-body text-sm text-leaf">
+              Заявка не ушла — связь пропала. Попробуйте ещё раз или напишите
+              боту в чат: он примет заявку без афиши.
+            </p>
+          )}
+
           <button
             type="button"
             onClick={submit}
-            className="mt-1 w-full rounded-full bg-foam px-8 py-4 font-display text-base font-bold text-deep transition active:scale-[0.98]"
+            disabled={sending}
+            className="mt-1 w-full rounded-full bg-foam px-8 py-4 font-display text-base font-bold text-deep transition active:scale-[0.98] disabled:opacity-60"
           >
-            Отправить заявку →
+            {sending ? "Отправляем…" : "Отправить заявку →"}
           </button>
         </div>
       )}

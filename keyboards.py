@@ -33,6 +33,7 @@ BTN_FAQ = "❓ Есть вопрос"
 BTN_CALC = "🧮 Калькулятор"
 BTN_ABOUT = "ℹ️ О вечеринке"
 BTN_CANCEL = "✖️ Отмена"
+BTN_WEBAPP = "🎟 Открыть афишу"
 
 # Inline-кнопка отмены под шагами с кнопками (способ связи, билет).
 CANCEL_CB = "newlead:cancel"
@@ -52,12 +53,14 @@ def main_kb(webapp_url: str = "") -> ReplyKeyboardMarkup:
     """Главное меню клиента.
 
     Два основных пути: оставить заявку прямо в чате либо задать вопрос (FAQ).
-    Если задан WEBAPP_URL, дополнительно показываем кнопку с Mini App-афишей.
+    Если задан WEBAPP_URL, первым рядом во всю ширину идёт Mini App-афиша —
+    главная точка входа (она же висит на кнопке «Меню» у поля ввода).
     """
-    rows = [[KeyboardButton(text=BTN_NEW_APPLICATION), KeyboardButton(text=BTN_FAQ)]]
-    rows.append([KeyboardButton(text=BTN_CALC)])
+    rows: list[list[KeyboardButton]] = []
     if webapp_url:
-        rows.append([KeyboardButton(text="🎟 Открыть афишу", web_app=WebAppInfo(url=webapp_url))])
+        rows.append([KeyboardButton(text=BTN_WEBAPP, web_app=WebAppInfo(url=webapp_url))])
+    rows.append([KeyboardButton(text=BTN_NEW_APPLICATION), KeyboardButton(text=BTN_FAQ)])
+    rows.append([KeyboardButton(text=BTN_CALC)])
     rows.append([KeyboardButton(text=BTN_ABOUT)])
     return ReplyKeyboardMarkup(
         keyboard=rows,
