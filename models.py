@@ -138,7 +138,9 @@ FAQ_ITEMS = [
         "Сюда входит:\n"
         "🛥 Трансфер на остров и обратно\n"
         "⛵ Покатушки на парусных катамаранах\n"
-        "🧖 Баня — детокс и полный расслабон\n\n"
+        "🏐 Волейбол\n"
+        "🧖 Баня — детокс и полный расслабон\n"
+        "…и другие активности на острове\n\n"
         "ℹ️ Проживание (палатки и кухни-шатры) и аренда снаряжения — отдельно. Своё "
         "привезёшь — сэкономишь, или арендуешь на острове.\n"
         "🔗 Все услуги и аренда клуба: <a href=\"https://ostrov-parusa.ru/\">"
@@ -264,20 +266,35 @@ class Application:
                     user_id: int | None = None) -> "Application":
         """Строит заявку из payload Mini App (Telegram.WebApp.sendData).
 
-        Бросает ValueError, если в данных нет имени или телефона.
+        Актуальный payload зеркалит диалог в чате: способ связи на выбор
+        (telegram/phone/whatsapp), контакт, взрослые и детские билеты.
+        Старый формат {name, phone, tickets} тоже принимается. Сумму считаем
+        сами по ценам из models — присланному клиентом не доверяем.
+        Бросает ValueError, если в данных нет имени или контакта.
         """
         name = str(data.get("name", "")).strip()
-        phone = str(data.get("phone", "")).strip()
-        if not name or not phone:
-            raise ValueError("В заявке нет имени или телефона")
-
+        method = CONTACT_METHODS_BY_KEY.get(
+            str(data.get("contact_method", "")).strip(), CONTACT_METHODS_BY_KEY["phone"]
+        )
+        contact = str(data.get("contact") or data.get("phone") or "").strip()
         raw_username = data.get("username") or fallback_username
+        # Telegram без введённого ника — подставляем @username аккаунта,
+        # как это делает диалог заявки в чате.
+        if not contact and method.key == "telegram" and raw_username:
+            contact = f"@{raw_username}"
+        if not name or not contact:
+            raise ValueError("В заявке нет имени или контакта")
+
+        tickets = cls._clamp_tickets(data.get("tickets", 1))
+        children = cls._clamp_children(data.get("children", 0))
         return cls(
             name=name,
-            contact_method="Телефон",
-            contact=phone,
+            contact_method=method.label,
+            contact=contact,
             username=f"@{raw_username}" if raw_username else "не задан",
-            tickets=cls._clamp_tickets(data.get("tickets", 1)),
+            tickets=tickets,
+            children=children,
+            amount=ticket_price_for(tickets) + children * CHILD_TICKET_PRICE,
             user_id=user_id,
         )
 
@@ -288,6 +305,14 @@ class Application:
         except (TypeError, ValueError):
             tickets = 1
         return max(1, min(tickets, MAX_TICKETS))
+
+    @staticmethod
+    def _clamp_children(value) -> int:
+        try:
+            children = int(value)
+        except (TypeError, ValueError):
+            children = 0
+        return max(0, min(children, MAX_TICKETS))
 
     @property
     def amount_label(self) -> str:
@@ -369,8 +394,9 @@ class Application:
             extras = f"🏕 Состав:\n{self.extras_note}\n\n"
             note = (
                 "ℹ️ <i>В сумму входят билет на open air и вход на остров (трансфер, "
-                "парусные катамараны, баня), аренда и снаряжение. Часть оплачивается заранее, "
-                "вход на остров — при выезде. Финальную стоимость подтвердит менеджер.</i>"
+                "парусные катамараны, волейбол, баня и другие активности), аренда и "
+                "снаряжение. Часть оплачивается заранее, вход на остров — при выезде. "
+                "Скрытых доплат нет. Финальную стоимость подтвердит менеджер.</i>"
             )
             people_label = "👥 Человек"
             # Из калькулятора вход на остров уже сидит в общей сумме.
@@ -379,7 +405,8 @@ class Application:
             extras = ""
             note = (
                 "ℹ️ <i>Бронируем билет на open air (оплата заранее). Вход на остров — "
-                "это трансфер, парусные катамараны и баня; проживание и аренда — отдельно.</i>"
+                "это трансфер, парусные катамараны, волейбол, баня и другие активности; "
+                "проживание и аренда — отдельно.</i>"
             )
             people_label = "🎫 Билетов"
             # Прямой поток: показываем обе части честно — билет заранее и вход на

@@ -79,7 +79,8 @@ _CART_INTRO = (
     "<i>Жми по услугам — каждый тап добавляет 1 в чек.</i>\n\n"
     "❗️ <b>Платишь в два приёма, это две РАЗНЫЕ оплаты:</b>\n"
     "1️⃣ билет — <b>сейчас переводом</b> (бронь)\n"
-    "2️⃣ остров и аренда — <b>потом, на месте при выезде</b>"
+    "2️⃣ остров и аренда — <b>потом, на месте при выезде</b>\n\n"
+    "⛺ Палатки и снаряжение — по желанию: своё привезёшь — за аренду не платишь."
 )
 
 
@@ -88,6 +89,24 @@ _CART_INTRO = (
 _CANOPY_INCLUDES = (
     "🎪 <i>В кухню-шатёр уже входят плитка и газ — отдельно брать не нужно.</i>"
 )
+
+# Что покрывает вход на остров — показываем прямо под строкой в чеке, чтобы
+# самая большая цифра сразу объясняла свою ценность. Сап-борды сюда НЕ входят —
+# они платная почасовая аренда, отдельная кнопка в калькуляторе.
+_ISLAND_INCLUDES = (
+    "   <i>входит: 🛥 трансфер туда-обратно, ⛵ парусные катамараны, "
+    "🏐 волейбол, 🧖 баня и другие активности на острове</i>"
+)
+
+# Что даёт билет на open air — чтобы и первая строка чека объясняла себя сама.
+_TICKET_INCLUDES = "сама тусовка: музыка, ночные сеты и атмосфера летней ночи"
+
+
+def _per_person(amount: int, people: int) -> str:
+    """«по N ₽ с человека» — при неделимой сумме с пометкой «примерно»."""
+    if amount % people == 0:
+        return f"по {amount // people} ₽ с человека"
+    return f"примерно по {round(amount / people)} ₽ с человека"
 
 
 def _has_canopy(data: dict) -> bool:
@@ -103,21 +122,40 @@ def _cheque_body(quote: Quote) -> str:
     """
     parts: list[str] = []
     if quote.advance_items:
-        rows = "\n".join(f"• {label} — {amount} ₽" for label, amount in quote.advance_items)
+        lines: list[str] = []
+        for label, amount in quote.advance_items:
+            lines.append(f"• {label} — {amount} ₽")
+            # Под билетом — что это за деньги и почём выходит на человека
+            # (групповой тариф: вчетвером дешевле, чем поодиночке).
+            if label.startswith("🎟 Билет"):
+                note = _TICKET_INCLUDES
+                if quote.people > 1 and amount:
+                    note += f" · {_per_person(amount, quote.people)}"
+                lines.append(f"   <i>{note}</i>")
+        rows = "\n".join(lines)
         parts.append(
             "1️⃣ <b>Платишь СЕЙЧАС переводом</b> (бронь):\n"
             f"{rows}\n"
             f"💳 <b>Перевести сейчас: {quote.advance} ₽</b>"
         )
     if quote.on_site_items:
-        rows = "\n".join(f"• {label} — {amount} ₽" for label, amount in quote.on_site_items)
+        lines: list[str] = []
+        for label, amount in quote.on_site_items:
+            lines.append(f"• {label} — {amount} ₽")
+            # Под входом на остров — расшифровка, что уже оплачено этой строкой.
+            if label.startswith("🏝 Вход на остров"):
+                lines.append(_ISLAND_INCLUDES)
+        rows = "\n".join(lines)
         parts.append(
             "2️⃣ <b>Платишь ПОТОМ на острове</b> (при выезде):\n"
             f"{rows}\n"
             f"🏝 <b>Оплатить на месте: {quote.on_site} ₽</b>"
         )
     body = "\n\n".join(parts)
-    return f"{body}\n\n💰 <b>Всего за поездку: {quote.total} ₽</b>"
+    total_line = f"💰 <b>Всего за поездку: {quote.total} ₽</b>"
+    if quote.people > 1 and quote.total:
+        total_line += f"\n<i>Это {_per_person(quote.total, quote.people)} за все три дня</i>"
+    return f"{body}\n\n{total_line}"
 
 
 def _render_cart(data: dict) -> tuple[str, object]:
@@ -219,7 +257,8 @@ async def calc_done(call: CallbackQuery, state: FSMContext) -> None:
         f"{_cheque_body(quote)}\n\n"
         "ℹ️ Билет и остров — это две <b>отдельные</b> оплаты: билет бронируешь "
         "сейчас переводом, а за остров и аренду платишь потом, на месте при "
-        "выезде. Финальную стоимость подтвердит менеджер."
+        "выезде. Скрытых доплат нет — платишь только за то, что в чеке. "
+        "Финальную стоимость подтвердит менеджер."
         f"{canopy_note}\n\n"
         "🌅 Останется только собрать своих и приехать на Волгу."
     )
