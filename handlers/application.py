@@ -490,7 +490,7 @@ async def confirm(call: CallbackQuery, state: FSMContext, config: Config) -> Non
 
     await state.clear()
     body = (
-        f"🎉 <b>Готово!</b> Заявка <b>#{application.id}</b> принята.\n\n"
+        "🎉 <b>Готово!</b> Заявка принята.\n\n"
         "Менеджер совсем скоро свяжется с вами. До встречи на Острове! 🌅"
     )
     cd = countdown.line()

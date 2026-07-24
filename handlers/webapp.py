@@ -42,8 +42,8 @@ async def on_webapp_data(message: Message, config: Config) -> None:
         await message.answer("Кажется, не хватает данных 🙈 Откройте форму и заполните имя и контакт.")
         return
 
-    application = await leads.submit_application(message.bot, config, application)
+    await leads.submit_application(message.bot, config, application)
     await message.answer(
-        f"🎉 <b>Готово!</b> Заявка <b>#{application.id}</b> принята.\n\n"
+        "🎉 <b>Готово!</b> Заявка принята.\n\n"
         "Менеджер совсем скоро свяжется с вами. До встречи на берегу! 🌅"
     )

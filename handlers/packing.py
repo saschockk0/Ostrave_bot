@@ -34,7 +34,7 @@ def render(mask: int) -> str:
 @router.callback_query(F.data == "pack:open")
 async def open_pack(call: CallbackQuery) -> None:
     # Новым сообщением (а не edit) — чтобы открываться откуда угодно, не затирая
-    # исходное (ответ FAQ или подтверждение принятой заявки «Готово #N»).
+    # исходное (ответ FAQ или подтверждение принятой заявки «Готово»).
     await call.answer()
     await call.message.answer(render(0), reply_markup=packing_kb(0))
 

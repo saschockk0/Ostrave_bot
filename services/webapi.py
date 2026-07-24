@@ -107,12 +107,12 @@ async def _handle_application(request: web.Request) -> web.Response:
     application = await leads.submit_application(bot, config, application)
 
     # Дублируем подтверждение в чат — как при заявке из диалога, чтобы у гостя
-    # осталась история и номер заявки под рукой.
+    # осталась история под рукой.
     if application.user_id:
         try:
             await bot.send_message(
                 application.user_id,
-                f"🎉 <b>Готово!</b> Заявка <b>#{application.id}</b> принята.\n\n"
+                "🎉 <b>Готово!</b> Заявка принята.\n\n"
                 "Менеджер совсем скоро свяжется с вами. До встречи на берегу! 🌅",
             )
         except Exception:  # noqa: BLE001 — гость мог закрыть личку боту
