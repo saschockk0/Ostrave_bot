@@ -511,6 +511,6 @@ async def confirm(call: CallbackQuery, state: FSMContext, config: Config) -> Non
     )
     await call.message.edit_text(
         journey.with_step(journey.STAGE_ISLAND, body),
-        reply_markup=success_kb(link, INVITE_TEXT),
+        reply_markup=success_kb(link, INVITE_TEXT, config.channel_url),
     )
     await call.message.answer("Главное меню 👇", reply_markup=main_kb(config.webapp_url))

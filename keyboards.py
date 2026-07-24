@@ -224,11 +224,15 @@ def confirm_kb() -> InlineKeyboardMarkup:
     )
 
 
-def success_kb(invite_link: str | None, invite_text: str) -> InlineKeyboardMarkup:
+def success_kb(
+    invite_link: str | None, invite_text: str, channel_url: str = ""
+) -> InlineKeyboardMarkup:
     """Кнопки под принятой заявкой: «Позвать своих» (нативный шеринг Telegram с
-    deep-link бота) и «Собрать рюкзак» (открывает чек-лист сборов).
+    deep-link бота), «Собрать рюкзак» (чек-лист сборов) и, если задан
+    CHANNEL_URL, «Наш канал».
 
     invite_link=None (не удалось узнать username бота) — показываем только сборы.
+    channel_url="" — кнопку канала не добавляем.
     """
     rows: list[list[InlineKeyboardButton]] = []
     if invite_link:
@@ -238,6 +242,8 @@ def success_kb(invite_link: str | None, invite_text: str) -> InlineKeyboardMarku
         )
         rows.append([InlineKeyboardButton(text="🤝 Позвать своих на Остров", url=share)])
     rows.append([InlineKeyboardButton(text="🎒 Собрать рюкзак", callback_data="pack:open")])
+    if channel_url:
+        rows.append([InlineKeyboardButton(text="📣 Наш канал", url=channel_url)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

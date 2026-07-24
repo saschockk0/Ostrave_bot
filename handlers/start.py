@@ -49,7 +49,7 @@ WELCOME = (
     "До встречи на берегу 🎶"
 )
 
-async def _returning_banner(message: Message) -> None:
+async def _returning_banner(message: Message, channel_url: str = "") -> None:
     """Если гость уже оставлял заявку — баннер «что дальше» перед/после меню.
 
     Тянем к Острову и после брони: статус, отсчёт и быстрые шаги (собрать рюкзак,
@@ -73,7 +73,7 @@ async def _returning_banner(message: Message) -> None:
             link = f"https://t.me/{me.username}?start=ref{user.id}"
     except Exception:  # noqa: BLE001 — без ссылки покажем только сборы
         link = None
-    await message.answer(text, reply_markup=success_kb(link, INVITE_TEXT))
+    await message.answer(text, reply_markup=success_kb(link, INVITE_TEXT, channel_url))
 
 
 @router.message(CommandStart())
@@ -90,6 +90,12 @@ async def cmd_start(message: Message, command: CommandObject, state: FSMContext,
     # Живой крючок: отсчёт до старта (если ещё впереди) — затем меню.
     cd = countdown.line()
     text = f"{cd}\n\n{WELCOME}" if cd else WELCOME
+    # Ссылка на канал — тёплым сайн-оффом сразу под прощанием (если задан CHANNEL_URL).
+    if config.channel_url:
+        text += (
+            "\n📣 Все анонсы и атмосфера — в нашем канале: "
+            f'<a href="{config.channel_url}">подписывайся</a>'
+        )
     await message.answer(text, reply_markup=main_kb(config.webapp_url))
     # Уже бронировал? Покажем «что дальше» отдельным баннером.
-    await _returning_banner(message)
+    await _returning_banner(message, config.channel_url)

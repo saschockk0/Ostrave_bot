@@ -77,6 +77,8 @@ class Config:
     webapp_api_port: int = 0
     # Файл FSM-хранилища: его же читают сегмент «бросили заявку» и напоминания.
     fsm_db_path: str = "fsm.db"
+    # HTTPS-ссылка на канал проекта (t.me/…). Пусто — ссылку нигде не показываем.
+    channel_url: str = ""
 
 
 def load_config() -> Config:
@@ -111,4 +113,6 @@ def load_config() -> Config:
         fsm_db_path=os.getenv("FSM_DB_PATH", "fsm.db"),
         webapp_api_host=os.getenv("WEBAPP_API_HOST", "127.0.0.1").strip(),
         webapp_api_port=webapp_api_port,
+        # Ссылка на канал опциональна: без неё бот просто её не показывает.
+        channel_url=os.getenv("CHANNEL_URL", "").strip(),
     )
